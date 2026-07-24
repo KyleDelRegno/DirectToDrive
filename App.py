@@ -1,14 +1,18 @@
 import os
 import threading
 import customtkinter as ctk
+from pathlib import Path
 from tkinter import filedialog, messagebox
 
-from Auth import get_credentials
+from Auth import get_credentials, get_credentials_path
 from DriveClient import (
     get_drive_service,
     list_folder,
+    search_drive,
     download_file,
     download_folder_recursive,
+    estimate_selection_size,
+    format_bytes,
     FOLDER_MIME,
 )
 
@@ -24,6 +28,7 @@ COLOR = {
     "bg": ("#E8EBF4", "#222831"),
     "surface": ("#FFFFFF", "#393E46"),
     "surface_alt": ("#DADEED", "#5D6573"),
+    "surface_dark": ("#B7C2DB", "#181C22"),
     "border": ("#E2D9C9", "#595D63"),
     "text": ("#20232B", "#FFFFFF"),
     "text_muted": ("#18191C", "#858A9C"),
@@ -46,7 +51,7 @@ def font(size, weight="normal"):
 # A single row in the file/folder list
 # ---------------------------------------------------------------------------
 class DriveItemRow(ctk.CTkFrame):
-    def __init__(self, master, item, folder_mime, open_folder_callback):
+    def __init__(self, master, item, folder_mime, open_folder_callback, on_change=None):
         super().__init__(
             master,
             corner_radius=10,
@@ -56,6 +61,7 @@ class DriveItemRow(ctk.CTkFrame):
         )
         self.item = item
         self.is_folder = item["mimeType"] == folder_mime
+        
 
         self.grid_columnconfigure(1, weight=1)
 
@@ -72,6 +78,7 @@ class DriveItemRow(ctk.CTkFrame):
             hover_color=COLOR["accent_hover"],
             checkbox_width=18,
             checkbox_height=18,
+            command=on_change,
         )
         self.checkbox.grid(row=0, column=1, padx=(0, 12), pady=10, sticky="w")
 
@@ -113,11 +120,16 @@ class DriveItemRow(ctk.CTkFrame):
 # Scrollable list container
 # ---------------------------------------------------------------------------
 class DriveItemPicker(ctk.CTkScrollableFrame):
-    def __init__(self, master, open_folder_callback, **kwargs):
+    def __init__(self, master, open_folder_callback, on_selection_changed=None, **kwargs):
         super().__init__(master, fg_color="transparent", **kwargs)
         self.grid_columnconfigure(0, weight=1)
         self.rows = []
         self.open_folder_callback = open_folder_callback
+        self.on_selection_changed = on_selection_changed
+
+    def _notify(self):
+        if self.on_selection_changed:
+            self.on_selection_changed()
 
     def load_items(self, items, folder_mime):
         for row in self.rows:
@@ -133,12 +145,15 @@ class DriveItemPicker(ctk.CTkScrollableFrame):
             )
             empty.grid(row=0, column=0, pady=30)
             self.rows.append(empty)
+            self._notify()
             return
 
         for i, item in enumerate(items):
-            row = DriveItemRow(self, item, folder_mime, self.open_folder_callback)
+            row = DriveItemRow(self, item, folder_mime, self.open_folder_callback, on_change=self._notify)
             row.grid(row=i, column=0, padx=2, pady=4, sticky="ew")
             self.rows.append(row)
+
+        self._notify()
 
     def get_selected_items(self):
         return [row.item for row in self.rows if isinstance(row, DriveItemRow) and row.get()]
@@ -147,11 +162,13 @@ class DriveItemPicker(ctk.CTkScrollableFrame):
         for row in self.rows:
             if isinstance(row, DriveItemRow):
                 row.select()
+        self._notify()
 
     def clear_all(self):
         for row in self.rows:
             if isinstance(row, DriveItemRow):
                 row.deselect()
+        self._notify()
 
 
 # ---------------------------------------------------------------------------
@@ -174,18 +191,27 @@ class DriveApp(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        self.title("Drive to SSD")
+        self.title("Direct To Drive")
         self.geometry("1160x720")
         self.minsize(980, 600)
         self.configure(fg_color=COLOR["bg"])
 
+        self.signed_in = False
         self.creds = None
         self.service = None
+
         self.current_folder_id = "root"
         self.current_folder_name = "My Drive"
         self.folder_history = []  # list of (id, name)
         self.current_items = []
-        self.signed_in = False
+        self.conflict_mode = "rename"
+        self.cancel_requested = False
+
+        self.search_mode = False
+        self.search_after_id = None
+        self.last_search_query = ""
+
+        self._selection_calc_gen = 0
 
         self.grid_columnconfigure(0, weight=0, minsize=SIDEBAR_WIDTH)
         self.grid_columnconfigure(1, weight=1)
@@ -193,6 +219,11 @@ class DriveApp(ctk.CTk):
 
         self._build_sidebar()
         self._build_main_panel()
+
+        #Starting Location is Desktop
+        desktop_path = Path.home() / "Desktop"
+        if desktop_path.exists():
+            self.path_entry.insert(0, str(desktop_path))
 
     # ------------------------------------------------------------------
     # Sidebar
@@ -202,7 +233,7 @@ class DriveApp(ctk.CTk):
         sidebar.grid(row=0, column=0, sticky="nsew")
         sidebar.grid_propagate(False)
         sidebar.grid_columnconfigure(0, weight=1)
-        sidebar.grid_rowconfigure(9, weight=1)
+        sidebar.grid_rowconfigure(8, weight=1)
 
         # Brand
         brand = ctk.CTkFrame(sidebar, fg_color="transparent")
@@ -261,9 +292,14 @@ class DriveApp(ctk.CTk):
         )
         self.path_entry.grid(row=4, column=0, padx=SIDEBAR_PADX, pady=(0, 6), sticky="ew")
 
+
+        destination_actions = ctk.CTkFrame(sidebar, fg_color="transparent")
+        destination_actions.grid(row=5, column=0, padx=SIDEBAR_PADX, pady=(0, 18), sticky="ew")
+        destination_actions.grid_columnconfigure((0, 1), weight=1)
+
         self.browse_button = ctk.CTkButton(
-            sidebar,
-            text="Browse\u2026",
+            destination_actions,
+            text="Browse…",
             font=font(12),
             height=32,
             corner_radius=8,
@@ -272,7 +308,20 @@ class DriveApp(ctk.CTk):
             hover_color=COLOR["border"],
             command=self.browse_folder,
         )
-        self.browse_button.grid(row=5, column=0, padx=SIDEBAR_PADX, pady=(0, 18), sticky="ew")
+        self.browse_button.grid(row=0, column=0, padx=(0, 4), sticky="ew")
+
+        self.open_destination_button = ctk.CTkButton(
+            destination_actions,
+            text="Open Folder",
+            font=font(12),
+            height=32,
+            corner_radius=8,
+            fg_color=COLOR["surface_alt"],
+            text_color=COLOR["text"],
+            hover_color=COLOR["border"],
+            command=self.open_destination_folder,
+        )
+        self.open_destination_button.grid(row=0, column=1, padx=(4, 0), sticky="ew")
 
         # Actions section
         section_label(sidebar, "Actions").grid(row=6, column=0, padx=SIDEBAR_PADX, pady=(4, 6), sticky="ew")
@@ -304,6 +353,29 @@ class DriveApp(ctk.CTk):
         self.clear_button = small_button(actions, "Deselect", self.clear_items)
         self.clear_button.grid(row=1, column=1, padx=(4, 0), sticky="ew")
 
+        # Selection summary — sits right above the download button
+        summary_card = ctk.CTkFrame(sidebar, corner_radius=12, fg_color=COLOR["bg"])
+        summary_card.grid(row=9, column=0, padx=SIDEBAR_PADX, pady=(0, 8), sticky="ew")
+        summary_card.grid_columnconfigure(0, weight=1)
+
+        self.selection_count_label = ctk.CTkLabel(
+            summary_card,
+            text="No items selected",
+            font=font(13, "bold"),
+            text_color=COLOR["text"],
+            anchor="w",
+        )
+        self.selection_count_label.grid(row=0, column=0, padx=14, pady=(10, 0), sticky="ew")
+
+        self.selection_size_label = ctk.CTkLabel(
+            summary_card,
+            text="",
+            font=font(12),
+            text_color=COLOR["text_muted"],
+            anchor="w",
+        )
+        self.selection_size_label.grid(row=1, column=0, padx=14, pady=(0, 10), sticky="ew")
+
         # Download button pinned toward the bottom
         self.download_button = ctk.CTkButton(
             sidebar,
@@ -317,6 +389,19 @@ class DriveApp(ctk.CTk):
             command=self.download_selected,
         )
         self.download_button.grid(row=10, column=0, padx=SIDEBAR_PADX, pady=(10, 22), sticky="sew")
+
+        self.cancel_button = ctk.CTkButton(
+            sidebar,
+            text="Cancel Download",
+            font=font(12, "bold"),
+            height=36,
+            corner_radius=10,
+            fg_color=COLOR["danger"],
+            hover_color=COLOR["accent_hover"],
+            state="disabled",
+            command=self.cancel_download,
+        )
+        self.cancel_button.grid(row=11, column=0, padx=SIDEBAR_PADX, pady=(0, 22), sticky="ew")
 
     # ------------------------------------------------------------------
     # Main panel
@@ -363,12 +448,30 @@ class DriveApp(ctk.CTk):
         )
         self.item_count_label.grid(row=0, column=2, sticky="e", padx=(10, 0))
 
-        # Divider
-        divider = ctk.CTkFrame(main, height=1, fg_color=COLOR["border"])
-        divider.grid(row=1, column=0, sticky="ew", pady=(0, 10))
+        #Search Item bar
+        search_row = ctk.CTkFrame(main, fg_color="transparent")
+        search_row.grid(row=1, column=0, sticky="ew", pady=(4, 8))
+        search_row.grid_columnconfigure(0, weight=1)
+
+        self.search_entry = ctk.CTkEntry(
+            search_row,
+            placeholder_text="Search files and folders in this view",
+            font=font(12),
+            height=34,
+            corner_radius=8,
+            border_color=COLOR["border"],
+        )
+        self.search_entry.grid(row=0, column=0, sticky="ew")
+        self.search_entry.bind("<KeyRelease>", self.on_search_change)
+
+
 
         # File list
-        self.item_picker = DriveItemPicker(main, open_folder_callback=self.open_folder)
+        self.item_picker = DriveItemPicker(
+            main,
+            open_folder_callback=self.open_folder,
+            on_selection_changed=self.on_selection_changed,
+        )
         self.item_picker.grid(row=2, column=0, sticky="nsew")
 
         self._render_placeholder("Sign in with Google to browse your Drive.")
@@ -419,6 +522,28 @@ class DriveApp(ctk.CTk):
             self.path_entry.delete(0, "end")
             self.path_entry.insert(0, folder)
 
+    def open_destination_folder(self):
+        folder = self.path_entry.get().strip()
+        if not folder:
+            messagebox.showwarning("No destination", "Choose a destination folder first.")
+            return
+
+        if not os.path.isdir(folder):
+            messagebox.showerror("Folder not found", "That destination folder does not exist.")
+            return
+
+        try:
+            if os.name == "nt":
+                os.startfile(folder)
+            elif sys.platform == "darwin":
+                os.system(f'open "{folder}"')
+            else:
+                os.system(f'xdg-open "{folder}"')
+        except Exception as e:
+            messagebox.showerror("Open Folder Error", str(e))
+
+
+
     def set_status(self, text):
         self.after(0, lambda: self.progress_label.configure(text=text))
 
@@ -452,30 +577,93 @@ class DriveApp(ctk.CTk):
         self.login_button.configure(text="Signed in \u2713", fg_color=COLOR["surface_alt"], text_color=COLOR["text"])
         for btn in (self.refresh_button, self.select_all_button, self.clear_button, self.download_button):
             btn.configure(state="normal")
+        self.cancel_button.configure(state="disabled")
         self.set_status("Ready")
 
     # ------------------------------------------------------------------
     # Browsing
     # ------------------------------------------------------------------
     def load_files(self):
+        self.search_mode = False
         if not self.service:
             return
 
         try:
             self.current_items = list_folder(self.service, self.current_folder_id)
-            self.after(0, lambda: self.item_picker.load_items(self.current_items, FOLDER_MIME))
-            self.after(0, lambda: self.breadcrumb_label.configure(text=self.current_folder_name))
-            count = len(self.current_items)
-            self.after(0, lambda: self.item_count_label.configure(
-                text=f"{count} item{'s' if count != 1 else ''}"
-            ))
-            self.set_status(f"Loaded {count} items from {self.current_folder_name}")
+            self.search_mode = False
+
+            def update_ui():
+                self.item_picker.load_items(self.current_items, FOLDER_MIME)
+                self.breadcrumb_label.configure(text=self.current_folder_name)
+
+                if hasattr(self, "search_entry"):
+                    self.search_entry.delete(0, "end")
+
+                count = len(self.current_items)
+                self.item_count_label.configure(
+                    text=f"{count} item{'s' if count != 1 else ''}"
+                )
+
+            self.after(0, update_ui)
+            self.set_status(f"Loaded {len(self.current_items)} items from {self.current_folder_name}")
         except Exception as e:
             self.set_status("Failed to load files")
             self.after(0, lambda: messagebox.showerror("Load Error", str(e)))
 
+    def run_search(self):
+        self.search_after_id = None
+        query = self.search_entry.get().strip()
+
+        if not query:
+            self.search_mode = False
+            self.item_picker.load_items(self.current_items, FOLDER_MIME)
+            self.breadcrumb_label.configure(text=self.current_folder_name)
+            self.item_count_label.configure(
+                text=f"{len(self.current_items)} item{'s' if len(self.current_items) != 1 else ''}"
+            )
+            return
+
+        if len(query) < 3:
+            return
+
+        self.last_search_query = query
+        self.set_status(f"Searching for '{query}'...")
+
+        def task(expected_query=query):
+            try:
+                results = search_drive(self.service, expected_query)
+
+                def update_ui():
+                    if self.search_entry.get().strip() != expected_query:
+                        return
+
+                    self.search_mode = True
+                    self.item_picker.load_items(results, FOLDER_MIME)
+                    self.breadcrumb_label.configure(text=f"Search results for: {expected_query}")
+                    self.item_count_label.configure(
+                        text=f"{len(results)} result{'s' if len(results) != 1 else ''}"
+                    )
+                    self.set_status(f"Found {len(results)} matching items")
+
+                self.after(0, update_ui)
+
+            except Exception as e:
+                self.after(0, lambda: messagebox.showerror("Search Error", str(e)))
+
+        threading.Thread(target=task, daemon=True).start()
+
+    def on_search_change(self, event=None):
+        if self.search_after_id:
+            self.after_cancel(self.search_after_id)
+
+        self.search_after_id = self.after(350, self.run_search)
+
     def open_folder(self, folder_item):
-        self.folder_history.append((self.current_folder_id, self.current_folder_name))
+        if not self.search_mode:
+            self.folder_history.append((self.current_folder_id, self.current_folder_name))
+        else:
+            self.folder_history.append((self.current_folder_id, self.current_folder_name))
+
         self.current_folder_id = folder_item["id"]
         self.current_folder_name = folder_item["name"]
         self.back_button.configure(state="normal")
@@ -499,6 +687,49 @@ class DriveApp(ctk.CTk):
     def clear_items(self):
         self.item_picker.clear_all()
 
+    def on_selection_changed(self):
+        selected = self.item_picker.get_selected_items()
+        count = len(selected)
+
+        self._selection_calc_gen += 1
+        gen = self._selection_calc_gen
+
+        if count == 0:
+            self.selection_count_label.configure(text="No items selected")
+            self.selection_size_label.configure(text="")
+            return
+
+        self.selection_count_label.configure(
+            text=f"{count} item{'s' if count != 1 else ''} selected"
+        )
+
+        if not self.service:
+            self.selection_size_label.configure(text="")
+            return
+
+        self.selection_size_label.configure(text="Calculating size\u2026")
+        threading.Thread(target=self._calc_selection_size, args=(selected, gen), daemon=True).start()
+
+    def _calc_selection_size(self, items, gen):
+        try:
+            result = estimate_selection_size(
+                self.service, items, cancel_check=lambda: gen != self._selection_calc_gen
+            )
+        except Exception:
+            if gen == self._selection_calc_gen:
+                self.after(0, lambda: self.selection_size_label.configure(text="Size unavailable"))
+            return
+
+        if gen != self._selection_calc_gen:
+            return  # selection changed again before this finished — discard
+
+        text = f"\u2248 {format_bytes(result['bytes'])}"
+        if result["unsized"]:
+            noun = "Google Doc" if result["unsized"] == 1 else "Google Docs"
+            text += f"  (+{result['unsized']} {noun} not sized)"
+
+        self.after(0, lambda: self.selection_size_label.configure(text=text))
+
     # ------------------------------------------------------------------
     # Downloading
     # ------------------------------------------------------------------
@@ -518,49 +749,114 @@ class DriveApp(ctk.CTk):
             messagebox.showwarning("No destination", "Choose an SSD folder first.")
             return
 
+        self.cancel_requested = False
         self.download_button.configure(state="disabled")
+        self.cancel_button.configure(state="normal")
 
         def task():
-            try:
-                total = len(selected_items)
-                for idx, item in enumerate(selected_items, start=1):
-                    self.set_status(f"Processing {idx}/{total}: {item['name']}")
-                    self.set_progress(0)
+            downloaded = 0
+            skipped = 0
+            failed = 0
+            cancelled = 0
+            errors = []
+
+            total = len(selected_items)
+
+            for idx, item in enumerate(selected_items, start=1):
+                if self.cancel_requested:
+                    cancelled += 1
+                    break
+
+                self.set_status(f"Processing {idx}/{total}: {item['name']}")
+                self.set_progress(0)
+
+                try:
                     if item["mimeType"] == FOLDER_MIME:
-                        download_folder_recursive(
+                        folder_stats = download_folder_recursive(
                             self.service,
                             item["id"],
                             item["name"],
                             output_folder,
-                            self.report_progress,
+                            progress_callback=self.report_progress,
+                            conflict_mode=self.conflict_mode,
+                            cancel_check=lambda: self.cancel_requested,
                         )
+                        downloaded += folder_stats["downloaded"]
+                        skipped += folder_stats["skipped"]
+                        failed += folder_stats["failed"]
+
                     else:
-                        download_file(
+                        result = download_file(
                             self.service,
                             item["id"],
                             item["name"],
                             output_folder,
                             item.get("mimeType"),
-                            self.report_progress,
+                            progress_callback=self.report_progress,
+                            conflict_mode=self.conflict_mode,
+                            cancel_check=lambda: self.cancel_requested,
                         )
 
+                        if result["status"] == "downloaded":
+                            downloaded += 1
+                        elif result["status"] == "skipped":
+                            skipped += 1
+                        elif result["status"] == "cancelled":
+                            cancelled += 1
+                            break
+
+                except Exception as e:
+                    failed += 1
+                    errors.append(f"{item['name']}: {e}")
+
+            if not self.cancel_requested:
                 self.set_progress(1)
+
+            summary = (
+                f"Downloaded: {downloaded}\n"
+                f"Skipped: {skipped}\n"
+                f"Failed: {failed}\n"
+                f"Cancelled: {cancelled}"
+            )
+
+            if self.cancel_requested:
+                self.set_status("Download cancelled")
+            elif failed > 0:
+                self.set_status("Download finished with some errors")
+            else:
                 self.set_status("Download complete")
-                self.after(0, lambda: messagebox.showinfo("Done", "Selected items downloaded successfully."))
-            except Exception as e:
-                self.set_status("Download failed")
-                self.after(0, lambda: messagebox.showerror("Download Error", str(e)))
-            finally:
-                self.after(0, lambda: self.download_button.configure(state="normal"))
+
+            self.after(0, lambda: messagebox.showinfo("Download summary", summary))
+
+            if errors:
+                error_text = "\n".join(errors[:10])
+                self.after(
+                    0,
+                    lambda: messagebox.showwarning("Some items failed", error_text)
+                )
+
+            self.after(0, self._finish_download_ui)
 
         threading.Thread(target=task, daemon=True).start()
 
+    def _finish_download_ui(self):
+        self.download_button.configure(state="normal")
+        self.cancel_button.configure(state="disabled")
+
+    def cancel_download(self):
+        self.cancel_requested = True
+        self.set_status("Cancelling download...")
+
+    
 
 if __name__ == "__main__":
-    if not os.path.exists("credentials.json"):
+    if not get_credentials_path().exists():
         root = ctk.CTk()
         root.withdraw()
-        messagebox.showerror("Missing credentials", "credentials.json was not found in this folder.")
+        messagebox.showerror(
+            "Missing credentials",
+            "credentials.json was not found. Put it next to the app resources before launching."
+        )
         root.destroy()
     else:
         app = DriveApp()
