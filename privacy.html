@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Privacy Policy — Drive → SSD</title>
+<meta name="description" content="Privacy policy for Drive → SSD, a local macOS Google Drive backup tool.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+
+  :root{
+    --ink:#14171f;
+    --panel:#1e2330;
+    --panel-raised:#272e3d;
+    --line:#363d4d;
+    --steel:#7e9bc4;
+    --steel-soft:#5d7699;
+    --clay:#c17c62;
+    --moss:#8ea876;
+    --text-hi:#eef1f6;
+    --text-lo:#8b93a5;
+    --text-faint:#5c6377;
+  }
+
+  *{ box-sizing:border-box; }
+
+  body{
+    margin:0;
+    background:var(--ink);
+    color:var(--text-hi);
+    font-family:'Inter', -apple-system, sans-serif;
+    line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  a{ color:var(--steel); }
+
+  .wordmark{
+    font-family:'Space Grotesk', sans-serif;
+    font-weight:600;
+    letter-spacing:-0.01em;
+  }
+
+  .mono{ font-family:'JetBrains Mono', monospace; }
+
+  .wrap{
+    max-width:720px;
+    margin:0 auto;
+    padding:0 28px;
+  }
+
+  header.site{
+    border-bottom:1px solid var(--line);
+    position:sticky;
+    top:0;
+    background:rgba(20,23,31,0.9);
+    backdrop-filter:blur(10px);
+    z-index:10;
+  }
+
+  .nav-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:18px 28px;
+    max-width:720px;
+    margin:0 auto;
+  }
+
+  .brand{ font-size:17px; display:flex; gap:10px; }
+  .brand .arrow{ color:var(--steel); }
+
+  .back{
+    font-size:13px;
+    color:var(--text-lo);
+    text-decoration:none;
+    display:flex;
+    align-items:center;
+    gap:6px;
+  }
+  .back:hover{ color:var(--text-hi); }
+
+  main{ padding:64px 0 90px; }
+
+  .eyebrow{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    font-family:'JetBrains Mono', monospace;
+    font-size:12px;
+    color:var(--text-lo);
+    border:1px solid var(--line);
+    padding:6px 12px;
+    border-radius:100px;
+    margin-bottom:24px;
+  }
+  .eyebrow .dot{
+    width:6px; height:6px; border-radius:50%;
+    background:var(--moss);
+  }
+
+  h1{
+    font-family:'Space Grotesk', sans-serif;
+    font-weight:700;
+    font-size:clamp(28px, 4.5vw, 38px);
+    letter-spacing:-0.02em;
+    margin:0 0 12px;
+  }
+
+  .updated{
+    color:var(--text-faint);
+    font-size:13px;
+    font-family:'JetBrains Mono', monospace;
+    margin-bottom:48px;
+  }
+
+  h2{
+    font-family:'Space Grotesk', sans-serif;
+    font-size:19px;
+    font-weight:600;
+    letter-spacing:-0.01em;
+    margin:0 0 14px;
+    display:flex;
+    align-items:baseline;
+    gap:10px;
+  }
+
+  h2 .num{
+    font-family:'JetBrains Mono', monospace;
+    font-size:13px;
+    font-weight:400;
+    color:var(--steel);
+  }
+
+  section{
+    padding:32px 0;
+    border-top:1px solid var(--line);
+  }
+  section:first-of-type{ border-top:none; padding-top:0; }
+
+  p{
+    color:var(--text-lo);
+    font-size:15px;
+    margin:0 0 14px;
+  }
+
+  p:last-child{ margin-bottom:0; }
+
+  ul{
+    margin:0 0 14px;
+    padding-left:20px;
+    color:var(--text-lo);
+    font-size:15px;
+  }
+  li{ margin-bottom:8px; }
+  li:last-child{ margin-bottom:0; }
+
+  .scope-card{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:14px 16px;
+    margin:18px 0;
+  }
+
+  .scope-card .icon{
+    width:32px; height:32px;
+    flex-shrink:0;
+    border-radius:8px;
+    background:var(--panel-raised);
+    border:1px solid var(--line);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+
+  .scope-card .icon svg{ width:15px; height:15px; }
+
+  .scope-card .label{
+    font-family:'JetBrains Mono', monospace;
+    font-size:12.5px;
+    color:var(--text-hi);
+  }
+
+  .scope-card .sub{
+    font-size:12px;
+    color:var(--text-faint);
+    margin-top:2px;
+  }
+
+  .contact-box{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-left:2px solid var(--steel);
+    border-radius:8px;
+    padding:18px 20px;
+    font-size:14.5px;
+    color:var(--text-lo);
+  }
+  .contact-box strong{ color:var(--text-hi); font-weight:500; }
+  .contact-box a{ text-decoration:underline; text-decoration-color:var(--steel-soft); text-underline-offset:3px; }
+
+  footer{
+    border-top:1px solid var(--line);
+    padding:32px 0 50px;
+    font-size:12.5px;
+    color:var(--text-faint);
+    display:flex;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:12px;
+  }
+  footer a{ color:var(--text-lo); text-decoration:none; }
+  footer a:hover{ color:var(--text-hi); }
+
+</style>
+</head>
+<body>
+
+<header class="site">
+  <div class="nav-row">
+    <div class="brand wordmark">Drive <span class="arrow">→</span> SSD</div>
+    <a class="back" href="index.html">← Back to homepage</a>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+    <div class="eyebrow"><span class="dot"></span>Effective August 20, 2026</div>
+    <h1>Privacy Policy</h1>
+    <p class="updated mono">Applies to the Drive → SSD desktop application for macOS</p>
+
+    <section>
+      <h2><span class="num">01</span>What this app does</h2>
+      <p>
+        Drive → SSD is a desktop application that connects to your Google Drive account
+        so you can browse your files and copy them to a folder on your own computer or
+        an external drive. It is a personal, independently built tool — it is not
+        affiliated with, endorsed by, or operated by Google.
+      </p>
+    </section>
+
+    <section>
+      <h2><span class="num">02</span>What Google data it accesses</h2>
+      <p>
+        When you sign in, the app requests a single Google OAuth scope:
+      </p>
+      <div class="scope-card">
+        <div class="icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#7e9bc4" stroke-width="1.6"><path d="M12 3l8 6-3.2 9H7.2L4 9z"/></svg>
+        </div>
+        <div>
+          <div class="label">drive.readonly</div>
+          <div class="sub">View and download your Google Drive files and their metadata — cannot edit, delete, or upload anything</div>
+        </div>
+      </div>
+      <p>
+        This scope lets the app list your files and folders and download their contents.
+        It does not allow the app to modify, delete, share, or upload anything to your
+        Drive, and it does not grant access to any other Google service (Gmail, Calendar,
+        Contacts, and so on).
+      </p>
+    </section>
+
+    <section>
+      <h2><span class="num">03</span>How that data is used and stored</h2>
+      <p>
+        The app is local-first by design. There is no backend server between you and
+        Google — file listings and downloads are requested directly from Google's API
+        and written straight to the destination folder you choose on your own disk.
+      </p>
+      <ul>
+        <li>Your file contents pass from Google's servers to your computer and are never sent anywhere else.</li>
+        <li>After signing in, your access token is saved in a local file inside your user Library folder on your Mac, so you don't have to sign in every time you open the app.</li>
+        <li>That token stays on your machine. It is never transmitted to any server the developer controls, because no such server exists.</li>
+        <li>No analytics, tracking, or usage data is collected by the app.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2><span class="num">04</span>Sharing with third parties</h2>
+      <p>
+        Drive → SSD does not share, sell, or transmit your Google data or your access
+        token to any third party. The only party your data ever passes through is
+        Google's own Drive API, which you're already authorizing directly when you sign in.
+      </p>
+    </section>
+
+    <section>
+      <h2><span class="num">05</span>Your control over access</h2>
+      <p>You can revoke this app's access at any time in two ways:</p>
+      <ul>
+        <li>From within Google's own account settings, at <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">myaccount.google.com/permissions</a> — remove Drive → SSD and it immediately loses access.</li>
+        <li>By deleting the local token file on your Mac, which signs the app out and requires a fresh sign-in next time.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2><span class="num">06</span>Changes to this policy</h2>
+      <p>
+        If this policy changes, the update will be posted on this page with a revised
+        effective date above. Since the app has no account system or email list, checking
+        back here is the way to stay informed of changes.
+      </p>
+    </section>
+
+    <section>
+      <h2><span class="num">07</span>Contact</h2>
+      <div class="contact-box">
+        <strong>Questions about this policy or the app?</strong><br>
+        Reach out at <a href="mailto:you@example.com">you@example.com</a>, or open an issue on
+        the <a href="https://github.com/" target="_blank" rel="noopener">GitHub repository</a>.
+      </div>
+    </section>
+  </div>
+</main>
+
+<div class="wrap">
+  <footer>
+    <span>Drive → SSD — an independent, personal project.</span>
+    <a href="index.html">Homepage</a>
+  </footer>
+</div>
+
+</body>
+</html>
