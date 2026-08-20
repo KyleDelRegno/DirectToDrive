@@ -1,6 +1,21 @@
+
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+*.pyo
+
+# Virtual environments
 .venv/
 venv/
+
+# PyInstaller output
+build/
+dist/
+*.spec
+
+# Local Google OAuth state
 token.json
 credentials.json
+
+# macOS clutter
+.DS_Store

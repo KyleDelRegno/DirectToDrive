@@ -1,0 +1,10 @@
+PYTHON EASY DOWNLOADER/
+├── app.py
+├── Auth.py
+├── DriveClient.py
+├── credentials.json
+├── assets/
+│   └── AppIcon.icns
+├── .gitignore
+├── requirements.txt
+└── .venv/

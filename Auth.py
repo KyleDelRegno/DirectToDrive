@@ -6,6 +6,8 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 
+#Actual authentication code
+
 SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
 
 def get_app_support_dir():
