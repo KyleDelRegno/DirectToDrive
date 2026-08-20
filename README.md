@@ -6,7 +6,6 @@
 
 ![platform](https://img.shields.io/badge/platform-macOS-7e9bc4?style=flat-square)
 ![scope](https://img.shields.io/badge/access-read--only-8ea876?style=flat-square)
-![status](https://img.shields.io/badge/status-not%20signed-c17c62?style=flat-square)
 
 [Download](#download) · [How it works](#how-it-works) · [Privacy](#privacy) · [FAQ](#faq)
 
